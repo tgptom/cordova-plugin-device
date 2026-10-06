@@ -23,7 +23,10 @@ description: Get device information.
 
 # cordova-plugin-device
 
-[![Android Testsuite](https://github.com/apache/cordova-plugin-device/actions/workflows/android.yml/badge.svg)](https://github.com/apache/cordova-plugin-device/actions/workflows/android.yml) [![Chrome Testsuite](https://github.com/apache/cordova-plugin-device/actions/workflows/chrome.yml/badge.svg)](https://github.com/apache/cordova-plugin-device/actions/workflows/chrome.yml) [![iOS Testsuite](https://github.com/apache/cordova-plugin-device/actions/workflows/ios.yml/badge.svg)](https://github.com/apache/cordova-plugin-device/actions/workflows/ios.yml) [![Lint Test](https://github.com/apache/cordova-plugin-device/actions/workflows/lint.yml/badge.svg)](https://github.com/apache/cordova-plugin-device/actions/workflows/lint.yml)
+[![Android Testsuite](https://github.com/tgptom/cordova-plugin-device/actions/workflows/android.yml/badge.svg)](https://github.com/tgptom/cordova-plugin-device/actions/workflows/android.yml) [![Chrome Testsuite](https://github.com/tgptom/cordova-plugin-device/actions/workflows/chrome.yml/badge.svg)](https://github.com/tgptom/cordova-plugin-device/actions/workflows/chrome.yml) [![iOS Testsuite](https://github.com/tgptom/cordova-plugin-device/actions/workflows/ios.yml/badge.svg)](https://github.com/tgptom/cordova-plugin-device/actions/workflows/ios.yml) [![Lint Test](https://github.com/tgptom/cordova-plugin-device/actions/workflows/lint.yml/badge.svg)](https://github.com/tgptom/cordova-plugin-device/actions/workflows/lint.yml)
+
+This is the [tgptom fork](https://github.com/tgptom/cordova-plugin-device).
+Report fork-specific issues in [this repository](https://github.com/tgptom/cordova-plugin-device/issues).
 
 This plugin defines a global `device` object, which describes the device's hardware and software.
 Although the object is in the global scope, it is not available until after the `deviceready` event.
@@ -37,7 +40,9 @@ function onDeviceReady() {
 
 ## Installation
 
-    cordova plugin add cordova-plugin-device
+Install this fork (the npm package name alone selects the upstream publication):
+
+    cordova plugin add https://github.com/tgptom/cordova-plugin-device.git
 
 ## Properties
 
@@ -60,10 +65,15 @@ from the existing OS-version jobs, which allow failures and use floating
 platform selections. Platform pins live in `tests/compatibility/*.config.json`;
 **Cordova package versions are not emulator/simulator OS versions**.
 
-| Cordova platform package pin | CI build toolchain | Runtime OS |
+For example, `cordova-android@14.0.1` is a Cordova package tested here on
+**Android OS 15 (API 35)**, not Android OS 14. Similarly, `cordova-ios@8.1.1`
+is a Cordova package tested on **iOS 18.5**, not iOS 8. These are independent
+version numbers; neither identifies the device plugin version (`3.0.2-dev`).
+
+| Cordova platform package version (exact pin) | CI build toolchain | Emulator/simulator operating system |
 | --- | --- | --- |
-| `cordova-android@14.0.1` | Ubuntu 24.04, JDK 17, SDK 35 / Build Tools >=35.0.0, Gradle 8.13 / AGP 8.7.3 | Android API 35, Google APIs x86_64 |
-| `cordova-android@15.1.0` | Ubuntu 24.04, JDK 17, SDK 36 / Build Tools >=36.0.0, Gradle 8.14.2 / AGP 8.10.1 | Android API 36, Google APIs x86_64 |
+| `cordova-android@14.0.1` | Ubuntu 24.04, JDK 17, SDK 35 / Build Tools >=35.0.0, Gradle 8.13 / AGP 8.7.3 | Android OS 15 (API 35), Google APIs x86_64 |
+| `cordova-android@15.1.0` | Ubuntu 24.04, JDK 17, SDK 36 / Build Tools >=36.0.0, Gradle 8.14.2 / AGP 8.10.1 | Android OS 16 (API 36), Google APIs x86_64 |
 | `cordova-ios@7.1.1` | macOS 15, Xcode 16.4, CocoaPods >=1.16.0, ios-deploy 1.12.2 | iPhone 16 simulator, iOS 18.5 |
 | `cordova-ios@8.1.1` | macOS 15, Xcode 16.4, CocoaPods >=1.16.0, ios-deploy 1.12.2 | iPhone 16 simulator, iOS 18.5 |
 

@@ -35,7 +35,7 @@ permissions:
 
 jobs:
   test:
-    name: iOS ${{ matrix.versions.ios-version }} Test
+    name: iOS simulator OS ${{ matrix.versions.ios-version }} (Cordova package unpinned)
     runs-on: ${{ matrix.versions.os-version }}
     continue-on-error: true
 
@@ -106,7 +106,7 @@ jobs:
         run: ${{ env.paramedic }} --config ./pr/local/${{ env.test_config }} --plugin ${{ env.test_plugin_path }}
 
   compatibility:
-    name: cordova-ios ${{ matrix.platform }} / simulator iOS 18.5
+    name: Cordova package cordova-ios@${{ matrix.platform }} / iOS simulator OS 18.5
     runs-on: macos-15
     timeout-minutes: 60
     strategy:
@@ -133,7 +133,7 @@ jobs:
           echo "TMPDIR=$TMPDIR" >> "$GITHUB_ENV"
           npm ci
           npm install -g cordova@13.0.0 ios-deploy@1.12.2 github:apache/cordova-paramedic#1c3a8075f31a20b77361dfcf0b5a10e9b00fcde1
-          echo "Cordova package: ios@${{ matrix.platform }}; simulator OS: iOS 18.5 (iPhone 16)"
+          echo "Cordova platform package: cordova-ios@${{ matrix.platform }}; iOS simulator OS: 18.5 (iPhone 16)"
           node --version
           xcodebuild -version
           pod --version

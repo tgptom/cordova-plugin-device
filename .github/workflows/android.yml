@@ -35,7 +35,7 @@ permissions:
 
 jobs:
   test:
-    name: Android ${{ matrix.versions.android }} Test
+    name: Android OS ${{ matrix.versions.android }} / emulator API ${{ matrix.versions.android-api }} (Cordova package unpinned)
     runs-on: ubuntu-latest
     continue-on-error: true
 
@@ -152,7 +152,7 @@ jobs:
           script: ${{ env.paramedic }} --config ./pr/local/${{ env.test_config }} --plugin ${{ env.test_plugin_path }}
 
   compatibility:
-    name: cordova-android ${{ matrix.platform }} / emulator API ${{ matrix.api }}
+    name: Cordova package cordova-android@${{ matrix.platform }} / Android OS API ${{ matrix.api }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -188,7 +188,7 @@ jobs:
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
           npm ci
           npm install -g cordova@13.0.0 github:apache/cordova-paramedic#1c3a8075f31a20b77361dfcf0b5a10e9b00fcde1
-          echo "Cordova package: android@${{ matrix.platform }}; emulator OS: API ${{ matrix.api }}"
+          echo "Cordova platform package: cordova-android@${{ matrix.platform }}; Android emulator OS API: ${{ matrix.api }}"
           node --version
           java -version
           cordova --version

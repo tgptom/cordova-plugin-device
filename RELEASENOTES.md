@@ -20,6 +20,16 @@
 -->
 # Release Notes
 
+### 3.0.2-dev (unreleased, tgptom fork)
+
+* Use Android `pluginInitialize()` and the iOS `Cordova/Cordova.h` header.
+* Add native build/runtime CI for Cordova packages `cordova-android@14.0.1`,
+  `cordova-android@15.1.0`, `cordova-ios@7.1.1`, and `cordova-ios@8.1.1`;
+  native compatibility results remain pending CI.
+* Distinguish Cordova package versions from emulator/simulator OS versions.
+* Point current project, issue, installation, and CI badge links to this fork.
+* Historical links below refer to the original upstream changes.
+
 ### 3.0.0 (Jun 05, 2024)
 
 **Breaking Changes:**
