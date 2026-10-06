@@ -29,20 +29,6 @@
   },
   "author": "Apache Software Foundation",
   "license": "Apache-2.0",
-  "engines": {
-    "cordovaDependencies": {
-      "2.1.0": {
-        "cordova-electron": ">=3.0.0"
-      },
-      "3.0.0": {
-        "cordova-electron": ">=3.0.0",
-        "cordova-android": ">=7.0.0"
-      },
-      "4.0.0": {
-        "cordova": ">100"
-      }
-    }
-  },
   "devDependencies": {
     "@cordova/eslint-config": "^5.1.0"
   }
