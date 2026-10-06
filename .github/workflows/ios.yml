@@ -153,12 +153,22 @@ jobs:
           '
       - name: Native simulator build
         run: cordova-paramedic --config "$CONFIG" --plugin "$GITHUB_WORKSPACE" --justbuild
-      - name: Verify installed platform pin and packaged privacy manifest
+      - name: Verify platform pin, simulator selection and packaged privacy manifest
         run: |
           packages=$(find "$TMPDIR" -path '*/node_modules/cordova-ios/package.json')
           test -n "$packages"
           while IFS= read -r package; do
             node -e 'const p = require(process.argv[1]); console.log(p.name, p.version); if (p.version !== process.argv[2]) process.exit(1)' "$package" "${{ matrix.platform }}"
+            (cd "${package%/node_modules/cordova-ios/package.json}" && cordova run ios --list --emulator) > "$RUNNER_TEMP/cordova-simulators.txt"
+            node -e '
+              const fs = require("node:fs");
+              const target = new RegExp(require(process.env.CONFIG).target);
+              const listing = fs.readFileSync(process.argv[1], "utf8");
+              console.log(listing);
+              if (!listing.split("\n").some(line => target.test(line))) {
+                throw new Error("Configured target does not match Cordova simulator listing; refusing fallback");
+              }
+            ' "$RUNNER_TEMP/cordova-simulators.txt"
           done <<< "$packages"
           python3 - <<'PY'
           import os

@@ -2,7 +2,7 @@
     "platform": "ios@8.1.1",
     "action": "run",
     "args": "--emulator --debug",
-    "target": "^iPhone-16, 18\\.5$",
+    "target": "^\\s*iPhone-16, 18\\.5\\s*$",
     "ci": true,
     "verbose": true,
     "cleanUpAfterRun": false
