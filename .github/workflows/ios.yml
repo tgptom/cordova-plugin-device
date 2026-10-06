@@ -104,3 +104,78 @@ jobs:
           test_plugin_path: ${{ endswith(env.repo, '/cordova-paramedic') && './spec/testable-plugin/' || './' }}
           paramedic: ${{ endswith(env.repo, '/cordova-paramedic') && 'node main.js' || 'cordova-paramedic' }}
         run: ${{ env.paramedic }} --config ./pr/local/${{ env.test_config }} --plugin ${{ env.test_plugin_path }}
+
+  compatibility:
+    name: cordova-ios ${{ matrix.platform }} / simulator iOS 18.5
+    runs-on: macos-15
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [7.1.1, 8.1.1]
+    env:
+      CONFIG: ${{ github.workspace }}/tests/compatibility/cordova-ios-${{ matrix.platform }}.config.json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.3
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: '16.4'
+      - name: Install pinned CLI and harness
+        env:
+          TMPDIR: ${{ runner.temp }}/device-paramedic
+        run: |
+          mkdir -p "$TMPDIR"
+          echo "TMPDIR=$TMPDIR" >> "$GITHUB_ENV"
+          npm ci
+          npm install -g cordova@13.0.0 ios-deploy@1.12.2 github:apache/cordova-paramedic#1c3a8075f31a20b77361dfcf0b5a10e9b00fcde1
+          echo "Cordova package: ios@${{ matrix.platform }}; simulator OS: iOS 18.5 (iPhone 16)"
+          node --version
+          xcodebuild -version
+          pod --version
+          cordova --version
+          cordova-paramedic --version
+      - name: Require the configured simulator (no fallback)
+        run: |
+          xcrun simctl list devices available --json | node -e '
+            let input = "";
+            process.stdin.on("data", chunk => { input += chunk; });
+            process.stdin.on("end", () => {
+              const devices = JSON.parse(input).devices["com.apple.CoreSimulator.SimRuntime.iOS-18-5"] || [];
+              const target = devices.find(device => device.name === "iPhone 16");
+              if (!target) throw new Error("Required iPhone 16 / iOS 18.5 simulator unavailable");
+              console.log(target);
+            });
+          '
+      - name: Native simulator build
+        run: cordova-paramedic --config "$CONFIG" --plugin "$GITHUB_WORKSPACE" --justbuild
+      - name: Verify installed platform pin and packaged privacy manifest
+        run: |
+          packages=$(find "$TMPDIR" -path '*/node_modules/cordova-ios/package.json')
+          test -n "$packages"
+          while IFS= read -r package; do
+            node -e 'const p = require(process.argv[1]); console.log(p.name, p.version); if (p.version !== process.argv[2]) process.exit(1)' "$package" "${{ matrix.platform }}"
+          done <<< "$packages"
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import plistlib
+          apps = list(pathlib.Path(os.environ["TMPDIR"]).glob("**/build/**/*.app"))
+          assert apps, "No built simulator app found"
+          for app in apps:
+              manifest = app / "CDVDevice.bundle" / "PrivacyInfo.xcprivacy"
+              with manifest.open("rb") as resource:
+                  privacy = plistlib.load(resource)
+              assert any(
+                  api["NSPrivacyAccessedAPIType"] == "NSPrivacyAccessedAPICategoryUserDefaults"
+                  and "CA92.1" in api["NSPrivacyAccessedAPITypeReasons"]
+                  for api in privacy["NSPrivacyAccessedAPITypes"]
+              ), f"Missing UserDefaults CA92.1 declaration in {manifest}"
+              print(f"Verified packaged privacy resource: {manifest}")
+          PY
+      - name: Native runtime plugin tests
+        run: cordova-paramedic --config "$CONFIG" --plugin "$GITHUB_WORKSPACE"
