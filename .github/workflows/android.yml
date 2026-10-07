@@ -155,6 +155,9 @@ jobs:
     name: cordova-android ${{ matrix.platform }} / emulator API ${{ matrix.api }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -184,6 +187,7 @@ jobs:
         run: |
           mkdir -p "$TMPDIR"
           echo "TMPDIR=$TMPDIR" >> "$GITHUB_ENV"
+          echo "CORDOVA_JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
           npm ci
@@ -217,3 +221,10 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: cordova-paramedic --config "$CONFIG" --plugin "$GITHUB_WORKSPACE"
+      - name: Verify runtime platform pin
+        run: |
+          packages=$(find "$TMPDIR" -path '*/node_modules/cordova-android/package.json')
+          test "$(printf '%s\n' "$packages" | grep -c .)" -ge 2
+          while IFS= read -r package; do
+            node -e 'const p = require(process.argv[1]); console.log(p.name, p.version); if (p.version !== process.argv[2]) process.exit(1)' "$package" "${{ matrix.platform }}"
+          done <<< "$packages"

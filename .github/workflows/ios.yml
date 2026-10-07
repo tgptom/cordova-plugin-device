@@ -109,6 +109,9 @@ jobs:
     name: cordova-ios ${{ matrix.platform }} / simulator iOS 18.5
     runs-on: macos-15
     timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -189,3 +192,10 @@ jobs:
           PY
       - name: Native runtime plugin tests
         run: cordova-paramedic --config "$CONFIG" --plugin "$GITHUB_WORKSPACE"
+      - name: Verify runtime platform pin
+        run: |
+          packages=$(find "$TMPDIR" -path '*/node_modules/cordova-ios/package.json')
+          test "$(printf '%s\n' "$packages" | grep -c .)" -ge 2
+          while IFS= read -r package; do
+            node -e 'const p = require(process.argv[1]); console.log(p.name, p.version); if (p.version !== process.argv[2]) process.exit(1)' "$package" "${{ matrix.platform }}"
+          done <<< "$packages"

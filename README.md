@@ -53,7 +53,7 @@ function onDeviceReady() {
 
 ## Native compatibility validation
 
-The fail-fast `compatibility` jobs in `android.yml` and `ios.yml` build a native
+The failure-enforcing `compatibility` jobs in `android.yml` and `ios.yml` build a native
 debug app, verify the installed platform package version, and run
 `tests/tests.js` through Paramedic on an emulator/simulator. These are separate
 from the existing OS-version jobs, which allow failures and use floating
@@ -85,15 +85,22 @@ to these repository-owned files, not Paramedic's external `pr/local` configs.
 CLI, harness source and platforms are pinned; Paramedic still fetches
 `cordova-plugin-test-framework` from upstream GitHub, and its transitive npm
 dependencies are not fully locked.
+The [macOS 15 runner inventory](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md)
+currently lists Xcode 16.4 and iPhone 16 / iOS 18.5. Hosted images, CocoaPods,
+the Android emulator and system-image revisions still float; CI preflights the
+exact iOS target and fails if it disappears. Both the build and fresh runtime
+projects have their installed Cordova package versions asserted.
 
 ### Local commands
 
-Run from the plugin checkout with the matching toolchain above. Start an Android
-emulator at API 35 or 36 before its runtime command. On macOS, select Xcode 16.4
+Run these Bash commands from the plugin checkout with the matching toolchain above. Start an Android
+emulator at API 35 for 14.0.1 or API 36 for 15.1.0 before its runtime command.
+On macOS, select Xcode 16.4
 and ensure `xcrun simctl list devices available` includes iPhone 16 / iOS 18.5;
 the CI preflight fails rather than silently choosing a different runtime.
 
 ```sh
+set -euo pipefail
 PLUGIN="$(pwd)"
 npm ci
 npm test # lint only, not native compatibility evidence
@@ -105,13 +112,16 @@ sdkmanager "platforms;android-35" "build-tools;35.0.0" \
 for PIN in 14.0.1 15.1.0; do
   CONFIG="$PLUGIN/tests/compatibility/cordova-android-$PIN.config.json"
   cordova-paramedic --config "$CONFIG" --plugin "$PLUGIN" --justbuild
-  cordova-paramedic --config "$CONFIG" --plugin "$PLUGIN"
 done
+# With an API 35 emulator running (repeat with PIN=15.1.0 on API 36):
+PIN=14.0.1
+cordova-paramedic --config "$PLUGIN/tests/compatibility/cordova-android-$PIN.config.json" --plugin "$PLUGIN"
 ```
 
 On macOS (instead of the Android SDK/emulator commands):
 
 ```sh
+set -euo pipefail
 PLUGIN="$(pwd)"
 sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
 npm install -g cordova@13.0.0 ios-deploy@1.12.2 \
@@ -120,8 +130,13 @@ pod --version # >=1.16.0
 xcodebuild -version
 xcrun simctl list devices available
 for PIN in 7.1.1 8.1.1; do
-  CONFIG="$PLUGIN/tests/compatibility/cordova-ios-$PIN.config.json"
+  export TMPDIR="$(mktemp -d)"
+  export CONFIG="$PLUGIN/tests/compatibility/cordova-ios-$PIN.config.json"
   cordova-paramedic --config "$CONFIG" --plugin "$PLUGIN" --justbuild
+  # Match the harness target against Cordova's listing before allowing runtime.
+  PACKAGE="$(find "$TMPDIR" -path '*/node_modules/cordova-ios/package.json')"
+  (cd "${PACKAGE%/node_modules/cordova-ios/package.json}" && cordova run ios --list --emulator) > "$TMPDIR/simulators.txt"
+  node -e 'const fs = require("node:fs"); const target = new RegExp(require(process.env.CONFIG).target); if (!fs.readFileSync(process.env.TMPDIR + "/simulators.txt", "utf8").split("\n").some(line => target.test(line))) throw new Error("Required simulator unavailable; refusing fallback");'
   cordova-paramedic --config "$CONFIG" --plugin "$PLUGIN"
 done
 ```
@@ -133,13 +148,14 @@ and prints their paths for inspection.
 
 ### Evidence and remaining checks
 
-At implementation time, `npm ci`, `npm test`, workflow/config parsing and actual
-Paramedic config resolution passed. Local Android platform installation and
-toolchain checks passed for both pins, but builds stopped fetching AGP from
-`dl.google.com` in the sandbox, before plugin compilation. No native runtime
-test or iOS build passed locally; **all four native combinations remain pending
-CI**, not certified compatibility. Earlier green OS-named workflows are not
-proof of these package pins.
+Recovery validation passed `npm ci`, `npm test` (lint only), workflow/shell/config
+parsing and actual pinned Paramedic config resolution. Released npm packages
+confirmed the platform pins, toolchain requirements and iOS umbrella headers.
+The sandbox cannot resolve `dl.google.com`, preventing AGP dependency fetching;
+no native runtime test or iOS build has passed here. GitHub Actions currently
+reports `action_required` for this PR's workflows, so **all four native
+combinations remain pending CI**, not certified compatibility. Earlier green
+OS-named workflows are not proof of these package pins.
 
 The iOS jobs inspect built simulator apps for
 `CDVDevice.bundle/PrivacyInfo.xcprivacy`, including the UserDefaults reason
