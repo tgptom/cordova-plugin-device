@@ -51,6 +51,124 @@ function onDeviceReady() {
 - device.serial
 - device.sdkVersion (Android only)
 
+## Native compatibility validation
+
+The failure-enforcing `compatibility` jobs in `android.yml` and `ios.yml` build a native
+debug app, verify the installed platform package version, and run
+`tests/tests.js` through Paramedic on an emulator/simulator. These are separate
+from the existing OS-version jobs, which allow failures and use floating
+platform selections. Platform pins live in `tests/compatibility/*.config.json`;
+**Cordova package versions are not emulator/simulator OS versions**.
+
+| Cordova platform package pin | CI build toolchain | Runtime OS |
+| --- | --- | --- |
+| `cordova-android@14.0.1` | Ubuntu 24.04, JDK 17, SDK 35 / Build Tools >=35.0.0, Gradle 8.13 / AGP 8.7.3 | Android API 35, Google APIs x86_64 |
+| `cordova-android@15.1.0` | Ubuntu 24.04, JDK 17, SDK 36 / Build Tools >=36.0.0, Gradle 8.14.2 / AGP 8.10.1 | Android API 36, Google APIs x86_64 |
+| `cordova-ios@7.1.1` | macOS 15, Xcode 16.4, CocoaPods >=1.16.0, ios-deploy 1.12.2 | iPhone 16 simulator, iOS 18.5 |
+| `cordova-ios@8.1.1` | macOS 15, Xcode 16.4, CocoaPods >=1.16.0, ios-deploy 1.12.2 | iPhone 16 simulator, iOS 18.5 |
+
+All four jobs use Node **22.23.3**, Cordova CLI **13.0.0**, and Paramedic commit
+**`1c3a8075f31a20b77361dfcf0b5a10e9b00fcde1`**. The exact platform releases and
+requirements were checked against their npm packages (Android
+`framework/cdv-gradle-config-defaults.json`, iOS `lib/check_reqs.js`).
+Android's Java source/target level 11 does **not** mean builds can use JDK 11:
+keep `JAVA_HOME` (and any `CORDOVA_JAVA_HOME`) on JDK 17.
+Both pinned iOS packages export `Cordova/Cordova.h`; UIKit is already explicitly
+imported by `CDVDevice.h`. Android's `pluginInitialize()` is also available in
+the existing minimum platform 7.0.0.
+
+The selected [Paramedic revision](https://github.com/apache/cordova-paramedic/tree/1c3a8075f31a20b77361dfcf0b5a10e9b00fcde1)
+preserves `platform@version` during installation. Later refactoring in Paramedic
+strips the version before installation, so do not substitute its current HEAD
+or the old npm `cordova-paramedic@0.5.0`. Absolute config paths resolve directly
+to these repository-owned files, not Paramedic's external `pr/local` configs.
+CLI, harness source and platforms are pinned; Paramedic still fetches
+`cordova-plugin-test-framework` from upstream GitHub, and its transitive npm
+dependencies are not fully locked.
+The [macOS 15 runner inventory](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md)
+currently lists Xcode 16.4 and iPhone 16 / iOS 18.5. Hosted images, CocoaPods,
+the Android emulator and system-image revisions still float; CI preflights the
+exact iOS target and fails if it disappears. Both the build and fresh runtime
+projects have their installed Cordova package versions asserted.
+
+### Local commands
+
+Run these Bash commands from the plugin checkout with the matching toolchain above. Start an Android
+emulator at API 35 for 14.0.1 or API 36 for 15.1.0 before its runtime command.
+On macOS, select Xcode 16.4
+and ensure `xcrun simctl list devices available` includes iPhone 16 / iOS 18.5;
+the CI preflight fails rather than silently choosing a different runtime.
+
+```sh
+set -euo pipefail
+PLUGIN="$(pwd)"
+npm ci
+npm test # lint only, not native compatibility evidence
+npm install -g cordova@13.0.0 \
+  github:apache/cordova-paramedic#1c3a8075f31a20b77361dfcf0b5a10e9b00fcde1
+export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+sdkmanager "platforms;android-35" "build-tools;35.0.0" \
+  "platforms;android-36" "build-tools;36.0.0"
+for PIN in 14.0.1 15.1.0; do
+  CONFIG="$PLUGIN/tests/compatibility/cordova-android-$PIN.config.json"
+  cordova-paramedic --config "$CONFIG" --plugin "$PLUGIN" --justbuild
+done
+# With an API 35 emulator running (repeat with PIN=15.1.0 on API 36):
+PIN=14.0.1
+cordova-paramedic --config "$PLUGIN/tests/compatibility/cordova-android-$PIN.config.json" --plugin "$PLUGIN"
+```
+
+On macOS (instead of the Android SDK/emulator commands):
+
+```sh
+set -euo pipefail
+PLUGIN="$(pwd)"
+sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
+npm install -g cordova@13.0.0 ios-deploy@1.12.2 \
+  github:apache/cordova-paramedic#1c3a8075f31a20b77361dfcf0b5a10e9b00fcde1
+pod --version # >=1.16.0
+xcodebuild -version
+xcrun simctl list devices available
+for PIN in 7.1.1 8.1.1; do
+  export TMPDIR="$(mktemp -d)"
+  export CONFIG="$PLUGIN/tests/compatibility/cordova-ios-$PIN.config.json"
+  cordova-paramedic --config "$CONFIG" --plugin "$PLUGIN" --justbuild
+  # Match the harness target against Cordova's listing before allowing runtime.
+  PACKAGE="$(find "$TMPDIR" -path '*/node_modules/cordova-ios/package.json')"
+  (cd "${PACKAGE%/node_modules/cordova-ios/package.json}" && cordova run ios --list --emulator) > "$TMPDIR/simulators.txt"
+  node -e 'const fs = require("node:fs"); const target = new RegExp(require(process.env.CONFIG).target); if (!fs.readFileSync(process.env.TMPDIR + "/simulators.txt", "utf8").split("\n").some(line => target.test(line))) throw new Error("Required simulator unavailable; refusing fallback");'
+  cordova-paramedic --config "$CONFIG" --plugin "$PLUGIN"
+done
+```
+
+Do not pass `--skipMainTests`. Paramedic's advertised `--timeout` is not honored
+by this revision; CI has a 60-minute job timeout, and native test callbacks and
+readiness checks have bounded Jasmine timeouts. It retains generated projects
+and prints their paths for inspection.
+
+### Evidence and remaining checks
+
+Recovery validation passed `npm ci`, `npm test` (lint only), workflow/shell/config
+parsing and actual pinned Paramedic config resolution. Released npm packages
+confirmed the platform pins, toolchain requirements and iOS umbrella headers.
+The sandbox cannot resolve `dl.google.com`, preventing AGP dependency fetching;
+no native runtime test or iOS build has passed here. GitHub Actions currently
+reports `action_required` for this PR's workflows, so **all four native
+combinations remain pending CI**, not certified compatibility. Earlier green
+OS-named workflows are not proof of these package pins.
+
+The iOS jobs inspect built simulator apps for
+`CDVDevice.bundle/PrivacyInfo.xcprivacy`, including the UserDefaults reason
+`CA92.1`. This preserves and checks the plugin resource; it does **not** establish
+whole-app App Store compliance. Signed release archives and real-device tests
+(including UUID persistence across launches and iOS apps on Mac) remain required.
+
+Android serial may legitimately be `"unknown"` on modern Android; tests do not
+require a hardware serial or assert emulator-detection heuristics. Android UUID
+uses `ANDROID_ID`, scoped by signing key, user and device, not a permanent global
+hardware identifier. iOS retains its existing saved UUID/identifierForVendor
+behavior. No engine minimum, plugin API, permission or SDK override is changed.
+
 ## device.cordova
 
 Returns the Cordova platform's version that is bundled in the application.
