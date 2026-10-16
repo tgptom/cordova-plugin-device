@@ -151,13 +151,18 @@ and prints their paths for inspection.
 Recovery validation passed `npm ci`, `npm test` (lint only), workflow/shell/config
 parsing and actual pinned Paramedic config resolution. Released npm packages
 confirmed the platform pins, toolchain requirements and iOS umbrella headers.
-The sandbox cannot resolve `dl.google.com`, preventing AGP dependency fetching;
-no native runtime test or iOS build has passed here. GitHub Actions currently
-reports `action_required` for this PR's workflows, so **all four native
-combinations remain pending CI**, not certified compatibility. Earlier green
-OS-named workflows are not proof of these package pins.
+Local Android builds were blocked fetching AGP because the sandbox could not
+resolve `dl.google.com`. Subsequent GitHub CI on October 14, 2026 passed native
+builds and runtime tests for **all four exact package pins**, including installed
+version assertions:
+[Android 14.0.1 / 15.1.0](https://github.com/tgptom/cordova-plugin-device/actions/runs/37563450273)
+and [iOS 7.1.1 / 8.1.1](https://github.com/tgptom/cordova-plugin-device/actions/runs/37563450243).
+These results apply to commit `5dcddf465c9a50a5da22a2a234b2ac0d22287e40`
+and the emulator/simulator combinations above, not all devices or future releases.
+The separate Chrome and legacy iOS 26 jobs timed out connecting to the test
+server; those failures are not passing coverage. The iOS 26 push job passed.
 
-The iOS jobs inspect built simulator apps for
+The passing pinned iOS jobs also inspected built simulator apps for
 `CDVDevice.bundle/PrivacyInfo.xcprivacy`, including the UserDefaults reason
 `CA92.1`. This preserves and checks the plugin resource; it does **not** establish
 whole-app App Store compliance. Signed release archives and real-device tests
