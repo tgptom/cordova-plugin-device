@@ -21,6 +21,23 @@
 
 exports.defineAutoTests = function () {
     describe('Device Information (window.device)', function () {
+        beforeAll(function (done) {
+            if (window.cordova.require('cordova/channel').onDeviceReady.state === 2) {
+                done();
+                return;
+            }
+            const timeout = setTimeout(function () {
+                document.removeEventListener('deviceready', ready);
+                done.fail('deviceready did not fire; check native device initialization errors');
+            }, 10000);
+            function ready () {
+                clearTimeout(timeout);
+                document.removeEventListener('deviceready', ready);
+                done();
+            }
+            document.addEventListener('deviceready', ready, false);
+        }, 15000);
+
         it('should exist', function () {
             expect(window.device).toBeDefined();
         });
@@ -77,6 +94,44 @@ exports.defineAutoTests = function () {
             expect(window.device.serial).toBeDefined();
             expect(String(window.device.serial).length > 0).toBe(true);
         });
+
+        if (window.cordova.platformId === 'android' || window.cordova.platformId === 'ios') {
+            describe('native mobile information', function () {
+                function expectNativeInfo (info) {
+                    expect(info.platform).toBe(window.cordova.platformId === 'android' ? 'Android' : 'iOS');
+                    ['uuid', 'model', 'version', 'manufacturer'].forEach(function (field) {
+                        expect(typeof info[field]).toBe('string');
+                        expect(info[field].length).toBeGreaterThan(0);
+                    });
+                    expect(typeof info.isVirtual).toBe('boolean');
+                    if (window.cordova.platformId === 'android') {
+                        expect(typeof info.sdkVersion).toBe('string');
+                        expect(info.sdkVersion.length).toBeGreaterThan(0);
+                    } else {
+                        expect(typeof info.isiOSAppOnMac).toBe('boolean');
+                    }
+                }
+
+                it('should expose initialized native fields after deviceready', function () {
+                    expect(window.device.available).toBe(true);
+                    expect(window.device.cordova).toBe(window.cordova.version);
+                    expectNativeInfo(window.device);
+                });
+
+                it('should retrieve information through the native bridge', function (done) {
+                    window.device.getInfo(function (info) {
+                        try {
+                            expectNativeInfo(info);
+                            done();
+                        } catch (error) {
+                            done.fail(error);
+                        }
+                    }, function (error) {
+                        done.fail('getDeviceInfo failed: ' + error);
+                    });
+                }, 10000);
+            });
+        }
     });
 };
 

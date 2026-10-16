@@ -18,10 +18,8 @@
 */
 package org.apache.cordova.device;
 
-import org.apache.cordova.CordovaWebView;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
-import org.apache.cordova.CordovaInterface;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -41,14 +39,10 @@ public class Device extends CordovaPlugin {
     }
 
     /**
-     * Sets the context of the Command. This can then be used to do things like
-     * get file paths associated with the Activity.
-     *
-     * @param cordova The context of the main Activity.
-     * @param webView The CordovaWebView Cordova is running in.
+     * Initializes the device UUID after the Cordova context is available.
      */
-    public void initialize(CordovaInterface cordova, CordovaWebView webView) {
-        super.initialize(cordova, webView);
+    @Override
+    protected void pluginInitialize() {
         Device.uuid = getUuid();
     }
 

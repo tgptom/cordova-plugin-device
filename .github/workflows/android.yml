@@ -113,7 +113,6 @@ jobs:
       - name: Run npm install
         run: |
           export PATH="/usr/local/lib/android/sdk/platform-tools":$PATH
-          export JAVA_HOME=$JAVA_HOME_11_X64
           npm i -g cordova@latest
           npm ci
 
@@ -151,3 +150,81 @@ jobs:
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: ${{ env.paramedic }} --config ./pr/local/${{ env.test_config }} --plugin ${{ env.test_plugin_path }}
+
+  compatibility:
+    name: cordova-android ${{ matrix.platform }} / emulator API ${{ matrix.api }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 14.0.1
+            api: 35
+            build-tools: 35.0.0
+          - platform: 15.1.0
+            api: 36
+            build-tools: 36.0.0
+    env:
+      CONFIG: ${{ github.workspace }}/tests/compatibility/cordova-android-${{ matrix.platform }}.config.json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.3
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Install pinned CLI and harness
+        env:
+          TMPDIR: ${{ runner.temp }}/device-paramedic
+        run: |
+          mkdir -p "$TMPDIR"
+          echo "TMPDIR=$TMPDIR" >> "$GITHUB_ENV"
+          echo "CORDOVA_JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          npm ci
+          npm install -g cordova@13.0.0 github:apache/cordova-paramedic#1c3a8075f31a20b77361dfcf0b5a10e9b00fcde1
+          echo "Cordova package: android@${{ matrix.platform }}; emulator OS: API ${{ matrix.api }}"
+          node --version
+          java -version
+          cordova --version
+          cordova-paramedic --version
+          sdkmanager "platforms;android-${{ matrix.api }}" "build-tools;${{ matrix.build-tools }}"
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Native debug build
+        run: cordova-paramedic --config "$CONFIG" --plugin "$GITHUB_WORKSPACE" --justbuild
+      - name: Verify installed platform pin
+        run: |
+          packages=$(find "$TMPDIR" -path '*/node_modules/cordova-android/package.json')
+          test -n "$packages"
+          while IFS= read -r package; do
+            node -e 'const p = require(process.argv[1]); console.log(p.name, p.version); if (p.version !== process.argv[2]) process.exit(1)' "$package" "${{ matrix.platform }}"
+          done <<< "$packages"
+      - name: Native runtime plugin tests
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: cordova-paramedic --config "$CONFIG" --plugin "$GITHUB_WORKSPACE"
+      - name: Verify runtime platform pin
+        run: |
+          packages=$(find "$TMPDIR" -path '*/node_modules/cordova-android/package.json')
+          test "$(printf '%s\n' "$packages" | grep -c .)" -ge 2
+          while IFS= read -r package; do
+            node -e 'const p = require(process.argv[1]); console.log(p.name, p.version); if (p.version !== process.argv[2]) process.exit(1)' "$package" "${{ matrix.platform }}"
+          done <<< "$packages"

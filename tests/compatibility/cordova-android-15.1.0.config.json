@@ -1,0 +1,8 @@
+{
+    "platform": "android@15.1.0",
+    "action": "run",
+    "args": "--emulator --debug",
+    "ci": true,
+    "verbose": true,
+    "cleanUpAfterRun": false
+}
