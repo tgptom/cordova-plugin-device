@@ -23,7 +23,7 @@
 
 #import <Availability.h>
 
-#import <Cordova/CDV.h>
+#import <Cordova/Cordova.h>
 #import "CDVDevice.h"
 
 @implementation UIDevice (ModelVersion)
